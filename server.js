@@ -11,7 +11,17 @@ const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, 'data');
 const DATA_FILE = path.join(DATA_DIR, 'lobbies.json');
 
 const app = express();
-app.use(express.static(path.join(__dirname, 'public')));
+// Webbestanden: uit de map "public", of (als die niet bestaat) los naast server.js
+const PUBLIC_DIR = path.join(__dirname, 'public');
+if (fs.existsSync(path.join(PUBLIC_DIR, 'index.html'))) {
+  app.use(express.static(PUBLIC_DIR));
+} else {
+  const send = f => (req, res) => res.sendFile(path.join(__dirname, f));
+  app.get('/', send('index.html'));
+  app.get('/index.html', send('index.html'));
+  app.get('/app.js', send('app.js'));
+  app.get('/style.css', send('style.css'));
+}
 app.get('/health', (req, res) => res.send('ok'));
 const server = http.createServer(app);
 const io = new Server(server, { cors: { origin: '*' } });
