@@ -1,4 +1,4 @@
-// Among Us klasversie – browser
+// Among Us class edition – browser
 (() => {
   const M = window.AUMAP, { drawSperm, drawBody } = window.SPR;
   const $ = (s) => document.querySelector(s);
@@ -10,11 +10,11 @@
   if (ticket) { ticket = decodeURIComponent(ticket); try { sessionStorage.setItem("au_t", ticket); } catch {} history.replaceState(null, "", location.pathname); }
   else { try { ticket = sessionStorage.getItem("au_t"); } catch {} }
   function fatal(t) { $("#fatalTxt").textContent = t; $("#fatal").classList.remove("hidden"); }
-  if (!ticket) { fatal("Open Among Us vanuit de Smartschool Reveal-extensie (Spellen → 🚀 Among Us)."); return; }
+  if (!ticket) { fatal("Open Among Us from the Smartschool Reveal extension (Games → 🚀 Among Us)."); return; }
 
   const sock = io({ auth: { t: ticket }, transports: ["websocket", "polling"] });
   sock.on("fatal", fatal);
-  sock.on("connect_error", () => toast("Verbinden…"));
+  sock.on("connect_error", () => toast("Connecting…"));
   sock.on("toast", toast);
 
   /* ---------- toestand ---------- */
@@ -40,25 +40,25 @@
     prevPh = ph;
     hud();
   });
-  sock.on("killed", (d) => splash(`<h1 style="color:#ff3b4e">UITGESCHAKELD</h1><canvas id="spK" width="220" height="140"></canvas><p>Je bent nu een geest. Je kunt nog opdrachten doen.</p>`, "alarmsp", 2600, () => fig("#spK", d.c, { dead: true })));
+  sock.on("killed", (d) => splash(`<h1 style="color:#ff3b4e">YOU WERE KILLED</h1><canvas id="spK" width="220" height="140"></canvas><p>You are a ghost now. You can still finish your tasks.</p>`, "alarmsp", 2600, () => fig("#spK", d.c, { dead: true })));
 
   function onPhase(a, b, old) {
     closeTask();
     if (b === "reveal") {
       const imp = S.me.role === "imp";
       const team = S.pl.filter((p) => p.g && (imp ? p.imp : true));
-      splash(`<p>${imp ? "" : `Er ${S.impCount > 1 ? "zijn" : "is"} <b style="color:#ff3b4e">${S.impCount} verrader${S.impCount > 1 ? "s" : ""}</b> onder ons`}</p><h1>${imp ? "VERRADER" : "BEMANNING"}</h1>
+      splash(`<p>${imp ? "" : `There ${S.impCount > 1 ? "are" : "is"} <b style="color:#ff3b4e">${S.impCount} Impostor${S.impCount > 1 ? "s" : ""}</b> among us`}</p><h1>${imp ? "IMPOSTOR" : "CREWMATE"}</h1>
         <div class="row">${team.map((p, i) => `<div><canvas class="rv" data-c="${p.c}" width="110" height="110"></canvas><div>${esc(p.n)}</div></div>`).join("")}</div>`, imp ? "imp" : "crew", 4800, () => document.querySelectorAll(".rv").forEach((c) => fig(c, +c.dataset.c)));
     }
     if (b === "meeting" && S.mt) {
-      splash(`<h1>${S.mt.body ? "LICHAAM GEMELD" : "NOODVERGADERING"}</h1><canvas id="spM" width="200" height="140"></canvas><p>${esc(S.mt.caller)} ${S.mt.body ? `vond ${esc(S.mt.body)}` : "drukte op de knop"}</p>`, "alarmsp", 2400, () => fig("#spM", S.mt.body ? S.mt.bodyC : S.mt.callerC, { dead: !!S.mt.body }));
+      splash(`<h1>${S.mt.body ? "DEAD BODY REPORTED" : "EMERGENCY MEETING"}</h1><canvas id="spM" width="200" height="140"></canvas><p>${esc(S.mt.caller)} ${S.mt.body ? `found ${esc(S.mt.body)}` : "pressed the button"}</p>`, "alarmsp", 2400, () => fig("#spM", S.mt.body ? S.mt.bodyC : S.mt.callerC, { dead: !!S.mt.body }));
       voteSel = null;
     }
     if (b === "eject" && S.eject) showEject(S.eject);
     if (b === "over") {
       const won = S.winner === (S.me.role === "imp" ? "imp" : "crew");
       const winners = S.pl.filter((p) => p.g && (S.winner === "imp" ? p.imp : !p.imp));
-      splash(`<h1 style="color:${won ? "#6cf" : "#ff3b4e"}">${S.me.inGame ? (won ? "OVERWINNING" : "NEDERLAAG") : "AFGELOPEN"}</h1><p>${S.winner === "imp" ? "De verraders winnen" : "De bemanning wint"}${S.why ? ` · ${esc(S.why)}` : ""}</p>
+      splash(`<h1 style="color:${won ? "#6cf" : "#ff3b4e"}">${S.me.inGame ? (won ? "VICTORY" : "DEFEAT") : "GAME OVER"}</h1><p>${S.winner === "imp" ? "Impostors win" : "Crewmates win"}${S.why ? ` · ${esc(S.why)}` : ""}</p>
         <div class="row">${winners.map((p) => `<div><canvas class="rv" data-c="${p.c}" width="110" height="110"></canvas><div>${esc(p.n)}</div></div>`).join("")}</div>
         <div class="btnrow" id="overBtns"></div>`, "", 0, () => { document.querySelectorAll(".rv").forEach((c) => fig(c, +c.dataset.c)); overButtons(); });
     }
@@ -66,7 +66,7 @@
   }
   function overButtons() {
     const b = $("#overBtns"); if (!b || !S) return;
-    b.innerHTML = S.host ? `<button class="btn2" id="oAgain">🔁 Nog een keer</button><button class="btn2" id="oLobby">Terug naar lobby</button>` : `<small>Wachten op de gastheer…</small><button class="btn2" id="oClose">Sluiten</button>`;
+    b.innerHTML = S.host ? `<button class="btn2" id="oAgain">🔁 Play again</button><button class="btn2" id="oLobby">Back to lobby</button>` : `<small>Waiting for the host…</small><button class="btn2" id="oClose">Close</button>`;
     $("#oAgain")?.addEventListener("click", () => sock.emit("start"));
     $("#oLobby")?.addEventListener("click", () => sock.emit("lobby"));
     $("#oClose")?.addEventListener("click", closeSplash);
@@ -95,8 +95,8 @@
     loop();
   }
   function showEject(e) {
-    const txt = e.skip ? "Niemand werd de ruimte in gestuurd. (Overgeslagen)" : `${e.name} was ${e.imp ? "" : "niet "}de verrader.`;
-    const sub = `${e.left} verrader${e.left === 1 ? "" : "s"} over.`;
+    const txt = e.skip ? "No one was ejected. (Skipped)" : `${e.name} was ${e.imp ? "" : "not "}an Impostor.`;
+    const sub = `${e.left} Impostor${e.left === 1 ? "" : "s"} remain${e.left === 1 ? "s" : ""}.`;
     let stars = ""; for (let i = 0; i < 70; i++) stars += `<i style="top:${Math.random() * 100}%;left:${Math.random() * 110}%;animation-duration:${2 + Math.random() * 4}s;opacity:${0.3 + Math.random() * 0.7}"></i>`;
     splash(`<div class="stars">${stars}</div>${e.skip ? "" : `<canvas class="ejectfig" id="spE" width="140" height="110"></canvas>`}<div class="ejecttxt" id="ejT"></div><p style="position:relative;z-index:2;color:#bbb" id="ejS"></p>`, "", 6800, () => {
       if (!e.skip) fig("#spE", e.color);
@@ -127,14 +127,14 @@
     $("#prog").style.width = Math.round(s.prog * 100) + "%";
     if (inPlay) {
       $("#tasks").innerHTML = s.me.role === "imp"
-        ? `<div class="imp">🔪 Schakel de bemanning uit en saboteer. Doe alsof je opdrachten doet!</div>`
-        : s.me.tasks.map((t) => `<div class="${t.done ? "done" : ""}">${M.ROOMS[t.id].n}: ${M.TASKS[t.id].n}${t.done ? " ✓" : ""}</div>`).join("") + (s.me.alive ? "" : `<div style="color:#9cf">👻 Je bent een geest: maak je opdrachten af!</div>`);
+        ? `<div class="imp">🔪 Sabotage and kill everyone. Fake tasks:</div>` + ["Fix Wiring", "Submit Scan", "Fuel Engines"].map((t) => `<div class="imp">${t}</div>`).join("")
+        : s.me.tasks.map((t) => `<div class="${t.done ? "done" : ""}">${M.ROOMS[t.id].n}: ${M.TASKS[t.id].n}${t.done ? " ✓" : ""}</div>`).join("") + (s.me.alive ? "" : `<div style="color:#9cf">👻 You are dead. Finish your tasks to help your crew!</div>`);
     }
     const lob = ph === "lobby" || (ph !== "over" && !s.me.inGame);
     $("#lobbyBar").classList.toggle("hidden", !lob);
     if (lob) {
-      $("#lbTitle").textContent = ph === "lobby" ? "Lobby" : "Spel bezig";
-      $("#lbSub").textContent = `Klas ${s.cls} · ${s.n} speler${s.n === 1 ? "" : "s"}`;
+      $("#lbTitle").textContent = ph === "lobby" ? "Lobby" : "Game in progress";
+      $("#lbSub").textContent = `Class ${s.cls} · ${s.n} player${s.n === 1 ? "" : "s"}`;
       const taken = new Set(s.pl.filter((p) => p.u !== s.me.u).map((p) => p.c));
       if (ph === "lobby") {
         const sig = s.me.c + "|" + [...taken].join();
@@ -142,7 +142,7 @@
       } else $("#colors").innerHTML = "";
       $("#bStart").classList.toggle("hidden", !(s.host && ph === "lobby"));
       $("#bStart").disabled = s.n < 4;
-      $("#lbHint").textContent = ph !== "lobby" ? "Er is een spel bezig. Je doet mee met de volgende ronde." : s.host ? (s.n < 4 ? `Nog ${4 - s.n} speler${4 - s.n === 1 ? "" : "s"} nodig.` : "Iedereen klaar? Druk op START.") : "Wachten tot de gastheer start…";
+      $("#lbHint").textContent = ph !== "lobby" ? "A game is in progress. You will join the next round." : s.host ? (s.n < 4 ? `${4 - s.n} more player${4 - s.n === 1 ? "" : "s"} needed.` : "Everyone ready? Press START.") : "Waiting for the host to start…";
     }
     const chatOk = ph === "lobby" || ph === "over" || !s.me.inGame;
     $("#bChat").classList.toggle("hidden", !chatOk);
@@ -150,7 +150,7 @@
     $("#bMap").classList.toggle("hidden", !inPlay);
     // alarm
     const al = $("#alarm");
-    if (ph === "play" && s.sab) { al.classList.remove("hidden"); al.textContent = s.sab === "reactor" ? `☢️ REACTOR-MELTDOWN over ${s.sabLeft}s · repareer in de Reactor` : "💡 De lichten zijn uit · repareer in Elektra"; }
+    if (ph === "play" && s.sab) { al.classList.remove("hidden"); al.textContent = s.sab === "reactor" ? `☢️ REACTOR MELTDOWN in ${s.sabLeft}s · fix it in Reactor` : "💡 LIGHTS ARE OFF · fix them in Electrical"; }
     else al.classList.add("hidden");
     document.body.classList.toggle("redalert", ph === "play" && s.sab === "reactor");
     // knoppen
@@ -183,7 +183,7 @@
     const sig = list.map((c) => c.id).join();
     if (box.dataset.sig === sig) return; box.dataset.sig = sig;
     const atB = box.scrollHeight - box.scrollTop - box.clientHeight < 40;
-    box.innerHTML = list.map((c) => c.c < 0 ? `<div class="cm sys"><div>${esc(c.b)}</div></div>` : `<div class="cm ${c.ghost ? "ghost" : ""}"><canvas width="34" height="34" data-c="${c.c}"></canvas><div><b style="color:${M.COLORS[c.c]};text-shadow:0 0 1px #000">${esc(c.n)}</b>${esc(c.b)}</div></div>`).join("") || `<div class="cm sys"><div>Nog geen berichten.</div></div>`;
+    box.innerHTML = list.map((c) => c.c < 0 ? `<div class="cm sys"><div>${esc(c.b)}</div></div>` : `<div class="cm ${c.ghost ? "ghost" : ""}"><canvas width="34" height="34" data-c="${c.c}"></canvas><div><b style="color:${M.COLORS[c.c]};text-shadow:0 0 1px #000">${esc(c.n)}</b>${esc(c.b)}</div></div>`).join("") || `<div class="cm sys"><div>No messages yet.</div></div>`;
     box.querySelectorAll("canvas[data-c]").forEach((c) => { const x = c.getContext("2d"); drawSperm(x, 24, 32, M.COLORS[+c.dataset.c], 1, 0, false, { scale: 0.55 }); });
     if (atB || true) box.scrollTop = box.scrollHeight;
   }
@@ -193,7 +193,7 @@
   function meetingUI() {
     const s = S, mt = s.mt; if (!mt) return;
     $("#meet").classList.remove("hidden");
-    $("#mTimer").textContent = mt.disc > 0 ? `Overleggen: ${mt.disc}s` : `Stemmen eindigt over: ${mt.end}s`;
+    $("#mTimer").textContent = mt.disc > 0 ? `Discussion time: ${mt.disc}s` : `Voting ends in: ${mt.end}s`;
     const canVote = s.me.inGame && s.me.alive && !s.me.vote && mt.disc === 0;
     const sig = JSON.stringify([s.pl.map((p) => [p.u, p.a, p.v]), s.me.vote, voteSel, canVote]);
     if ($("#mGrid").dataset.sig !== sig) {
@@ -201,15 +201,15 @@
       $("#mGrid").innerHTML = s.pl.filter((p) => p.g).map((p) => {
         const mine = p.u === s.me.u;
         return `<button class="pc ${p.a ? "" : "dead"} ${mine ? "me" : ""} ${voteSel === p.u ? "sel" : ""}" data-pv="${esc(p.u)}" ${canVote && p.a && !mine ? "" : "disabled"}>
-          <canvas width="50" height="46" data-c="${p.c}" data-d="${p.a ? "" : 1}"></canvas><div><div>${esc(p.n)}${p.imp && !mine ? " 🔪" : ""}</div><small>${p.a ? "" : "💀 dood"}</small></div>
-          ${p.v ? `<span class="vt">GESTEMD</span>` : ""}
+          <canvas width="50" height="46" data-c="${p.c}" data-d="${p.a ? "" : 1}"></canvas><div><div>${esc(p.n)}${p.imp && !mine ? " 🔪" : ""}</div><small>${p.a ? "" : "💀 dead"}</small></div>
+          ${p.v ? `<span class="vt">I VOTED</span>` : ""}
           ${voteSel === p.u && canVote ? `<span class="ok"><span class="y" data-yes="${esc(p.u)}" role="button">✔</span><span class="n" data-no role="button">✖</span></span>` : ""}</button>`;
       }).join("");
       $("#mGrid").querySelectorAll("canvas").forEach((c) => { const x = c.getContext("2d"); if (c.dataset.d) drawBody(x, 25, 30, M.COLORS[+c.dataset.c], 0); else drawSperm(x, 32, 44, M.COLORS[+c.dataset.c], 1, 0, false, { scale: 0.75 }); });
       $("#mSkip").disabled = !canVote; $("#mSkip").classList.toggle("sel", voteSel === "skip");
-      $("#mSkip").textContent = voteSel === "skip" && canVote ? "⏭ OVERSLAAN? klik nog eens" : "⏭ OVERSLAAN";
+      $("#mSkip").textContent = voteSel === "skip" && canVote ? "⏭ SKIP? click again" : "⏭ SKIP VOTE";
     }
-    $("#mInfo").textContent = !s.me.inGame ? "Je kijkt mee." : !s.me.alive ? "👻 Geesten stemmen niet." : s.me.vote ? "✅ Je hebt gestemd." : mt.disc > 0 ? "Eerst overleggen…" : "Klik op iemand om te stemmen.";
+    $("#mInfo").textContent = !s.me.inGame ? "You are spectating." : !s.me.alive ? "👻 Ghosts can't vote." : s.me.vote ? "✅ You voted." : mt.disc > 0 ? "Discuss first…" : "Click a player to vote.";
     $("#mIn").disabled = !(s.me.inGame && s.me.alive);
   }
   $("#mGrid").addEventListener("click", (e) => {
@@ -269,7 +269,7 @@
   function openTask(id) {
     taskId = id; const T = M.TASKS[id], B = $("#taskBody");
     $("#taskTitle").textContent = `${M.ROOMS[id].n}: ${T.n}`; $("#taskOv").classList.remove("hidden");
-    const finish = () => { B.innerHTML = `<div class="tok">✅ Opdracht voltooid!</div>`; sendPos(true); sock.emit("task", id); setTimeout(() => { if (taskId === id) closeTask(); }, 800); };
+    const finish = () => { B.innerHTML = `<div class="tok">✅ Task complete!</div>`; sendPos(true); sock.emit("task", id); setTimeout(() => { if (taskId === id) closeTask(); }, 800); };
     if (T.t === "code") {
       const code = String(Math.floor(10000 + Math.random() * 90000)); let typed = "";
       const draw = () => { B.innerHTML = `<div class="tcode">${code}</div><div class="tdisp">${typed.padEnd(5, "_")}</div><div class="keys">${[1, 2, 3, 4, 5, 6, 7, 8, 9, "⌫", 0, "OK"].map((k) => `<button data-k="${k}">${k}</button>`).join("")}</div>`; };
@@ -277,19 +277,19 @@
       B.onclick = (e) => { const k = e.target.closest("[data-k]")?.dataset.k; if (k == null) return; if (k === "⌫") typed = typed.slice(0, -1); else if (k === "OK") { if (typed === code) return finish(); typed = ""; } else if (typed.length < 5) typed += k; draw(); if (typed === code) finish(); };
     } else if (T.t === "draden") {
       const C = ["#ff3b4e", "#3d8bff", "#ffe14d", "#ff7ad9"], L = [...C].sort(() => Math.random() - 0.5), R = [...C].sort(() => Math.random() - 0.5), ok = new Set(); let sel = null;
-      const draw = () => { B.innerHTML = `<p>Verbind de draden met dezelfde kleur.</p><div class="wires"><div>${L.map((c) => `<button class="wire ${ok.has(c) ? "ok" : ""} ${sel === c ? "sel" : ""}" data-l="${c}" style="background:${c}"></button>`).join("")}</div><div>${R.map((c) => `<button class="wire ${ok.has(c) ? "ok" : ""}" data-r="${c}" style="background:${c}"></button>`).join("")}</div></div>`; };
+      const draw = () => { B.innerHTML = `<p>Connect the wires of the same color.</p><div class="wires"><div>${L.map((c) => `<button class="wire ${ok.has(c) ? "ok" : ""} ${sel === c ? "sel" : ""}" data-l="${c}" style="background:${c}"></button>`).join("")}</div><div>${R.map((c) => `<button class="wire ${ok.has(c) ? "ok" : ""}" data-r="${c}" style="background:${c}"></button>`).join("")}</div></div>`; };
       draw();
       B.onclick = (e) => { const l = e.target.closest("[data-l]"), r = e.target.closest("[data-r]"); if (l && !ok.has(l.dataset.l)) sel = l.dataset.l; else if (r && sel) { if (r.dataset.r === sel) ok.add(sel); sel = null; } draw(); if (ok.size === 4) finish(); };
     } else if (T.t === "scan") {
-      B.innerHTML = `<p>Ga op de scanner staan…</p><div class="tbar"><i id="tb"></i></div><button class="hold" id="tgo">SCAN STARTEN</button>`;
-      $("#tgo").onclick = (e) => { e.target.disabled = true; e.target.textContent = "Scannen…"; let p = 0; const it = setInterval(() => { if (taskId !== id) return clearInterval(it); p += 2.5; const b = $("#tb"); if (b) b.style.width = p + "%"; if (p >= 100) { clearInterval(it); finish(); } }, 100); };
+      B.innerHTML = `<p>Step onto the scanner…</p><div class="tbar"><i id="tb"></i></div><button class="hold" id="tgo">START SCAN</button>`;
+      $("#tgo").onclick = (e) => { e.target.disabled = true; e.target.textContent = "Scanning…"; let p = 0; const it = setInterval(() => { if (taskId !== id) return clearInterval(it); p += 2.5; const b = $("#tb"); if (b) b.style.width = p + "%"; if (p >= 100) { clearInterval(it); finish(); } }, 100); };
     } else if (T.t === "kisten") {
       const n = [1, 2, 3, 4, 5, 6].sort(() => Math.random() - 0.5); let next = 1;
-      const draw = () => { B.innerHTML = `<p>Tik de kisten aan van 1 tot 6.</p><div class="boxes">${n.map((x) => `<button class="${x < next ? "ok" : ""}" data-b="${x}">${x < next ? "✔" : x}</button>`).join("")}</div>`; };
+      const draw = () => { B.innerHTML = `<p>Tap the crates from 1 to 6.</p><div class="boxes">${n.map((x) => `<button class="${x < next ? "ok" : ""}" data-b="${x}">${x < next ? "✔" : x}</button>`).join("")}</div>`; };
       draw();
       B.onclick = (e) => { const b = e.target.closest("[data-b]"); if (!b) return; const v = +b.dataset.b; if (v === next) next++; else if (v >= next) next = 1; draw(); if (next > 6) finish(); };
     } else {
-      B.innerHTML = `<p>Houd de knop ingedrukt tot de balk vol is.</p><div class="tbar"><i id="tb"></i></div><button class="hold" id="th">INGEDRUKT HOUDEN</button>`;
+      B.innerHTML = `<p>Hold the button until the bar is full.</p><div class="tbar"><i id="tb"></i></div><button class="hold" id="th">HOLD</button>`;
       let p = 0, it = null; const b = $("#th"), bar = () => { const x = $("#tb"); if (x) x.style.width = p + "%"; };
       const stop = () => { clearInterval(it); it = null; if (p < 100) { p = 0; bar(); } };
       b.addEventListener("pointerdown", () => { if (it) return; it = setInterval(() => { if (taskId !== id) return stop(); p += 4; bar(); if (p >= 100) { clearInterval(it); it = null; finish(); } }, 100); });
@@ -378,7 +378,7 @@
     for (const p of list) {
       if (S.ph === "play" && !S.me.inGame) continue;
       drawSperm(ctx, p.x, p.y, M.COLORS[p.c], p.f, ts + p.x * 0.01, p.w, { ghost: p.ghost });
-      const nm = p.mine ? (playing() ? "" : "jij") : p.n;
+      const nm = p.mine ? (playing() ? "" : "you") : p.n;
       if (nm) { ctx.font = "bold 15px Trebuchet MS, sans-serif"; ctx.textAlign = "center"; ctx.lineWidth = 4; ctx.strokeStyle = "#000"; ctx.strokeText(nm, p.x, p.y - 50); ctx.fillStyle = p.imp ? "#ff4d5e" : "#fff"; ctx.fillText(nm, p.x, p.y - 50); }
     }
     // duisternis

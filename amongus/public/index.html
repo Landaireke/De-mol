@@ -1,21 +1,21 @@
 <!DOCTYPE html>
-<html lang="nl">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-<title>Among Us · klasversie</title>
+<title>Among Us · class edition</title>
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
 <canvas id="cv"></canvas>
 
 <div id="top" class="hud top hidden">
-  <div class="bar"><i id="prog"></i><span>OPDRACHTEN</span></div>
+  <div class="bar"><i id="prog"></i><span>TOTAL TASKS COMPLETED</span></div>
   <div id="tasks" class="tasks"></div>
 </div>
 <div id="tr" class="hud tr">
   <button id="bChat" class="sq hidden" title="Chat (C)">💬<b id="chatDot" class="dot hidden"></b></button>
-  <button id="bMap" class="sq hidden" title="Kaart (M)">🗺️</button>
+  <button id="bMap" class="sq hidden" title="Map (M)">🗺️</button>
 </div>
 <div id="alarm" class="alarm hidden"></div>
 <div id="lobbyBar" class="lobbybar hidden">
@@ -26,25 +26,25 @@
 </div>
 <div id="acts" class="acts hidden">
   <button id="aSab" class="act red hidden"><i>☢️</i><span>SABOTAGE</span></button>
-  <button id="aVent" class="act red hidden"><i>🕳️</i><span>KOKER</span></button>
-  <button id="aKill" class="act red hidden"><i>🔪</i><span>UITSCHAKELEN</span><b id="killCd"></b></button>
-  <button id="aReport" class="act"><i>📣</i><span>MELDEN</span></button>
-  <button id="aUse" class="act"><i>✋</i><span>GEBRUIK</span></button>
+  <button id="aVent" class="act red hidden"><i>🕳️</i><span>VENT</span></button>
+  <button id="aKill" class="act red hidden"><i>🔪</i><span>KILL</span><b id="killCd"></b></button>
+  <button id="aReport" class="act"><i>📣</i><span>REPORT</span></button>
+  <button id="aUse" class="act"><i>✋</i><span>USE</span></button>
 </div>
-<div id="sabMenu" class="sabmenu hidden"><button data-sab="reactor">☢️ Reactor laten smelten</button><button data-sab="lights">💡 Lichten uit</button></div>
+<div id="sabMenu" class="sabmenu hidden"><button data-sab="reactor">☢️ Reactor meltdown</button><button data-sab="lights">💡 Lights</button></div>
 
 <div id="chat" class="chat hidden">
   <div class="chead"><b id="chatTitle">Chat</b><button id="chatX" class="x">✕</button></div>
   <div id="chatList" class="clist"></div>
-  <form id="chatForm" class="cform"><input id="chatIn" maxlength="160" autocomplete="off" placeholder="Typ een bericht…"><button>➤</button></form>
+  <form id="chatForm" class="cform"><input id="chatIn" maxlength="160" autocomplete="off" placeholder="Type a message…"><button>➤</button></form>
 </div>
 
 <div id="mapOv" class="ov hidden"><div class="mapbox"><canvas id="mapCv" width="1000" height="550"></canvas><button id="mapX" class="x">✕</button></div></div>
 <div id="taskOv" class="ov hidden"><div class="taskbox"><div class="thead"><b id="taskTitle"></b><button id="taskX" class="x">✕</button></div><div id="taskBody"></div></div></div>
 <div id="meet" class="ov meet hidden"><div class="tablet">
-  <div class="mhead"><b>Wie is de verrader?</b><span id="mTimer"></span></div>
-  <div class="mwrap"><div id="mGrid" class="mgrid"></div><div class="mside"><div id="mChat" class="clist"></div><form id="mForm" class="cform"><input id="mIn" maxlength="160" autocomplete="off" placeholder="Overleg…"><button>➤</button></form></div></div>
-  <div class="mfoot"><button id="mSkip" class="skip">⏭ OVERSLAAN</button><span id="mInfo"></span></div>
+  <div class="mhead"><b>Who is the Impostor?</b><span id="mTimer"></span></div>
+  <div class="mwrap"><div id="mGrid" class="mgrid"></div><div class="mside"><div id="mChat" class="clist"></div><form id="mForm" class="cform"><input id="mIn" maxlength="160" autocomplete="off" placeholder="Discuss…"><button>➤</button></form></div></div>
+  <div class="mfoot"><button id="mSkip" class="skip">⏭ SKIP VOTE</button><span id="mInfo"></span></div>
 </div></div>
 <div id="splash" class="ov splash hidden"></div>
 <div id="msg" class="toast hidden"></div>

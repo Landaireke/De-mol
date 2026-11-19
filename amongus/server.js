@@ -65,7 +65,7 @@ function start(L) {
   L.chat = L.chat.filter(() => false); L.log = []; L.sab = null; L.sabAt = now() - SAB_CD + 12000; L.winner = null; L.meetingNo = 0; L.eject = null;
   gather(L);
   L.phase = "reveal"; L.until = now() + REVEAL_T; L.impCount = k;
-  say(L, "🚀 Het schip vertrekt!");
+  say(L, "🚀 The ship takes off!");
 }
 function checkWin(L) {
   const g = inGame(L); if (!g.length) return null;
@@ -76,13 +76,13 @@ function checkWin(L) {
   if (t.length && t.every((x) => x.done)) return "crew";
   return null;
 }
-function over(L, w, why) { L.phase = "over"; L.winner = w; L.sab = null; L.why = why || ""; say(L, w === "crew" ? "🎉 De bemanning wint!" : "🔪 De verraders winnen!"); }
+function over(L, w, why) { L.phase = "over"; L.winner = w; L.sab = null; L.why = why || ""; say(L, w === "crew" ? "🎉 Crewmates win!" : "🔪 Impostors win!"); }
 function meeting(L, caller, body) {
   L.meetingNo = (L.meetingNo || 0) + 1;
   L.meeting = { no: L.meetingNo, caller: caller.name, callerC: caller.color, body: body ? body.name : null, bodyC: body ? body.color : null, disc: now() + DISC_T + 2500, end: now() + DISC_T + VOTE_T + 2500 };
   L.sab = null; L.phase = "meeting";
   inGame(L).forEach((p) => { p.vote = null; });
-  say(L, body ? `📣 ${caller.name} vond het lichaam van ${body.name}!` : `🚨 ${caller.name} drukte op de noodknop!`);
+  say(L, body ? `📣 ${caller.name} reported ${body.name}'s body!` : `🚨 ${caller.name} called an emergency meeting!`);
 }
 function resolveMeeting(L) {
   const al = alive(L), tally = new Map(); let skip = 0;
@@ -93,8 +93,8 @@ function resolveMeeting(L) {
   let ej = { skip: true, votes };
   if (who && !tie && max > skip) {
     const v = L.players.get(who);
-    if (v) { v.alive = false; v.body = null; ej = { name: v.name, color: v.color, imp: v.role === "imp", votes }; say(L, `${v.name} is de ruimte in gestuurd.`); }
-  } else say(L, "Niemand is de ruimte in gestuurd.");
+    if (v) { v.alive = false; v.body = null; ej = { name: v.name, color: v.color, imp: v.role === "imp", votes }; say(L, `${v.name} was ejected.`); }
+  } else say(L, "No one was ejected.");
   ej.left = inGame(L).filter((p) => p.alive && p.role === "imp").length;
   inGame(L).forEach((p) => { p.body = null; p.vote = null; p.killAt = now() + KILL_CD + EJECT_T; });
   gather(L);
@@ -108,13 +108,13 @@ setInterval(() => {
     // weggevallen spelers
     for (const p of L.players.values()) if (!p.sock && t - p.goneAt > (L.phase === "lobby" || L.phase === "over" ? 8000 : 60000)) {
       L.players.delete(p.uid);
-      if (L.phase !== "lobby" && L.phase !== "over" && p.inGame && p.alive) { p.alive = false; say(L, `🚪 ${p.name} heeft het schip verlaten.`); }
+      if (L.phase !== "lobby" && L.phase !== "over" && p.inGame && p.alive) { p.alive = false; say(L, `🚪 ${p.name} left the game.`); }
     }
     if (!L.players.size) { lobbies.delete(L.code); continue; }
     if (!L.players.has(L.host)) L.host = L.players.keys().next().value;
     if (L.phase === "reveal" && t >= L.until) L.phase = "play";
     if (L.phase === "play") {
-      if (L.sab === "reactor" && t >= L.sabEnd) over(L, "imp", "De reactor is gesmolten!");
+      if (L.sab === "reactor" && t >= L.sabEnd) over(L, "imp", "Reactor meltdown!");
       else { const w = checkWin(L); if (w) over(L, w); }
     }
     if (L.phase === "meeting" && (t >= L.meeting.end || alive(L).every((p) => p.vote))) resolveMeeting(L);
@@ -159,16 +159,16 @@ function snapshot(L) {
 /* ---------- verbindingen ---------- */
 io.on("connection", (sock) => {
   const tk = verify(sock.handshake.auth?.t);
-  if (!tk) { sock.emit("fatal", "Je ticket is ongeldig of verlopen. Open het spel opnieuw vanuit de extensie."); return sock.disconnect(true); }
+  if (!tk) { sock.emit("fatal", "Your ticket is invalid or expired. Open the game again from the extension."); return sock.disconnect(true); }
   const L = lobby(tk.c, clean(tk.cn || tk.c, 40));
   let p = L.players.get(tk.u);
-  if (p) { if (p.sock && p.sock !== sock) { p.sock.emit("fatal", "Je speelt al in een ander venster."); p.sock.disconnect(true); } }
+  if (p) { if (p.sock && p.sock !== sock) { p.sock.emit("fatal", "You are already playing in another window."); p.sock.disconnect(true); } }
   else {
-    p = { uid: tk.u, name: clean(tk.n, 20) || "Speler", color: freeColor(L), x: M.TABLE.x, y: M.TABLE.y + 120, f: 1, inGame: false, alive: true, tasks: [], meetings: 1, killAt: 0 };
+    p = { uid: tk.u, name: clean(tk.n, 20) || "Player", color: freeColor(L), x: M.TABLE.x, y: M.TABLE.y + 120, f: 1, inGame: false, alive: true, tasks: [], meetings: 1, killAt: 0 };
     if (L.phase === "lobby") { gather(L); }
     L.players.set(p.uid, p);
     if (!L.host) L.host = p.uid;
-    if (L.phase === "lobby") chat(L, null, `${p.name} is binnengekomen.`, true);
+    if (L.phase === "lobby") chat(L, null, `${p.name} joined.`, true);
   }
   p.sock = sock; p.goneAt = 0; p.posT = now();
   const ctx = () => ({ playing: p.inGame && L.phase === "play" });
@@ -186,7 +186,7 @@ io.on("connection", (sock) => {
   sock.on("color", (c) => { if (L.phase !== "lobby" && L.phase !== "over") return; c = +c; if (!(c >= 0 && c < M.COLORS.length)) return; if ([...L.players.values()].some((q) => q !== p && q.color === c)) return; p.color = c; });
   sock.on("start", () => {
     if (L.host !== p.uid || (L.phase !== "lobby" && L.phase !== "over")) return;
-    if (L.players.size < 4) return sock.emit("toast", "Je hebt minstens 4 spelers nodig.");
+    if (L.players.size < 4) return sock.emit("toast", "You need at least 4 players.");
     start(L);
   });
   sock.on("lobby", () => { if (L.host !== p.uid || L.phase !== "over") return; L.phase = "lobby"; L.players.forEach((q) => { q.inGame = false; q.alive = true; q.role = null; }); gather(L); L.chat = []; });
@@ -244,4 +244,4 @@ io.on("connection", (sock) => {
   sock.on("disconnect", () => { if (p.sock === sock) { p.sock = null; p.goneAt = now(); } });
 });
 
-srv.listen(PORT, () => console.log("Among Us klasversie op poort " + PORT));
+srv.listen(PORT, () => console.log("Among Us class edition on port " + PORT));
