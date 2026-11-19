@@ -101,8 +101,8 @@
     loop();
   }
   function showEject(e) {
-    const txt = e.skip ? "No one was ejected. (Skipped)" : `${e.name} was ${e.imp ? "" : "not "}an Impostor.`;
-    const sub = `${e.left} Impostor${e.left === 1 ? "" : "s"} remain${e.left === 1 ? "s" : ""}.`;
+    const txt = e.skip ? "No one was ejected. (Skipped)" : e.imp == null ? `${e.name} was ejected.` : `${e.name} was ${e.imp ? "" : "not "}an Impostor.`;
+    const sub = e.left == null ? "" : `${e.left} Impostor${e.left === 1 ? "" : "s"} remain${e.left === 1 ? "s" : ""}.`;
     let stars = ""; for (let i = 0; i < 70; i++) stars += `<i style="top:${Math.random() * 100}%;left:${Math.random() * 110}%;animation-duration:${2 + Math.random() * 4}s;opacity:${0.3 + Math.random() * 0.7}"></i>`;
     splash(`<div class="stars">${stars}</div>${e.skip ? "" : `<canvas class="ejectfig" id="spE" width="140" height="110"></canvas>`}<div class="ejecttxt" id="ejT"></div><p style="position:relative;z-index:2;color:#bbb" id="ejS"></p>`, "", 6800, () => {
       if (!e.skip) fig("#spE", e.color);
@@ -120,17 +120,18 @@
     if (!playing()) return null;
     const t = myTaskHere(); if (t) return { k: "task", id: t.id };
     if (S.me.alive && S.sab && near(M.FIX[S.sab], 120)) return { k: "fix" };
-    if (S.me.alive && !S.sab && S.me.meet > 0 && near(M.TABLE, 150)) return { k: "emergency" };
+    if (S.me.alive && !S.sab && S.me.meet > 0 && S.emergIn === 0 && near(M.TABLE, 150)) return { k: "emergency" };
     return null;
   }
   const bodyNear = () => playing() && S.me.alive && S.bodies.some((b) => near(b, 150));
-  const killTarget = () => playing() && S.me.role === "imp" && S.me.alive ? [...others.values()].filter((o) => o.p && o.p.g && o.p.a && !o.p.imp && o.x != null && near(o, 110)).sort((a, b) => Math.hypot(a.x - me.x, a.y - me.y) - Math.hypot(b.x - me.x, b.y - me.y))[0] : null;
+  const killTarget = () => playing() && S.me.role === "imp" && S.me.alive ? [...others.values()].filter((o) => o.p && o.p.g && o.p.a && !o.p.imp && o.x != null && near(o, S.me.killR || 110)).sort((a, b) => Math.hypot(a.x - me.x, a.y - me.y) - Math.hypot(b.x - me.x, b.y - me.y))[0] : null;
   const ventNear = () => playing() && S.me.role === "imp" && S.me.alive && Object.values(M.VENTS).some((v) => near(v, 80));
 
   function hud() {
     const s = S, ph = s.ph, inPlay = s.me.inGame && (ph === "play" || ph === "reveal" || ph === "eject");
     $("#top").classList.toggle("hidden", !inPlay);
-    $("#prog").style.width = Math.round(s.prog * 100) + "%";
+    $(".bar").classList.toggle("hidden", s.prog == null);
+    if (s.prog != null) $("#prog").style.width = Math.round(s.prog * 100) + "%";
     if (inPlay) {
       $("#tasks").innerHTML = s.me.role === "imp"
         ? `<div class="imp">🔪 Sabotage and kill everyone. Fake tasks:</div>` + ["Fix Wiring", "Submit Scan", "Fuel Engines"].map((t) => `<div class="imp">${t}</div>`).join("")
@@ -150,6 +151,8 @@
       $("#bStart").disabled = s.n < 4;
       $("#lbHint").textContent = ph !== "lobby" ? "A game is in progress. You will join the next round." : s.host ? (s.n < 4 ? `${4 - s.n} more player${4 - s.n === 1 ? "" : "s"} needed.` : "Everyone ready? Press START.") : "Waiting for the host to start…";
     }
+    drawSettings();
+    if (ph !== "lobby" && ph !== "over") $("#setOv").classList.add("hidden");
     const chatOk = ph === "lobby" || ph === "over" || !s.me.inGame;
     $("#bChat").classList.toggle("hidden", !chatOk);
     if (!chatOk) $("#chat").classList.add("hidden");
@@ -197,6 +200,35 @@
     if (atB || true) box.scrollTop = box.scrollHeight;
   }
 
+  /* ---------- game settings (lobby) ---------- */
+  const SETS = [
+    ["Impostors", [["imps", "Impostors", "n", 1, 3, 1, (v) => v]]],
+    ["Meetings", [["confirm", "Confirm ejects", "b"], ["meetings", "Emergency meetings", "n", 0, 5, 1, (v) => v + " per player"], ["emergCd", "Emergency cooldown", "n", 0, 60, 5, (v) => v + "s"], ["disc", "Discussion time", "n", 0, 120, 15, (v) => v + "s"], ["vote", "Voting time", "n", 15, 180, 15, (v) => v + "s"], ["anon", "Anonymous votes", "b"]]],
+    ["Players", [["speed", "Player speed", "n", 0.5, 2, 0.25, (v) => v + "x"], ["crewVis", "Crewmate vision", "n", 0.5, 2, 0.25, (v) => v + "x"], ["impVis", "Impostor vision", "n", 0.5, 2.5, 0.25, (v) => v + "x"], ["killCd", "Kill cooldown", "n", 10, 60, 2.5, (v) => v + "s"], ["killDist", "Kill distance", "n", 0, 2, 1, (v) => ["Short", "Medium", "Long"][v]]]],
+    ["Tasks", [["visual", "Visual tasks", "b"], ["taskBar", "Task bar updates", "o", ["always", "meetings", "never"], (v) => ({ always: "Always", meetings: "Meetings", never: "Never" })[v]], ["tasks", "Tasks per crewmate", "n", 2, 8, 1, (v) => v]]],
+  ];
+  function drawSettings() {
+    if ($("#setOv").classList.contains("hidden") || !S) return;
+    const st = S.set, host = S.host && (S.ph === "lobby" || S.ph === "over");
+    $("#setTitle").textContent = host ? "Game settings" : "Game settings (only the host can change them)";
+    const sig = JSON.stringify([st, host]); if ($("#setBody").dataset.sig === sig) return; $("#setBody").dataset.sig = sig;
+    $("#setBody").innerHTML = SETS.map(([h, rows]) => `<h4>${h.toUpperCase()}</h4>` + rows.map(([k, label, t, a, b, step, fmt]) => {
+      if (t === "b") return `<div class="srow"><span>${label}</span><button class="tog ${st[k] ? "on" : ""}" data-tog="${k}" ${host ? "" : "disabled"}></button></div>`;
+      if (t === "o") { const i = a.indexOf(st[k]); return `<div class="srow"><span>${label}</span><span class="ctl"><button data-opt="${k}" data-d="-1" ${host && i > 0 ? "" : "disabled"}>−</button><span class="val">${b(st[k])}</span><button data-opt="${k}" data-d="1" ${host && i < a.length - 1 ? "" : "disabled"}>+</button></span></div>`; }
+      return `<div class="srow"><span>${label}</span><span class="ctl"><button data-num="${k}" data-d="-1" ${host && st[k] > a ? "" : "disabled"}>−</button><span class="val">${fmt(st[k])}</span><button data-num="${k}" data-d="1" ${host && st[k] < b ? "" : "disabled"}>+</button></span></div>`;
+    }).join("")).join("");
+  }
+  $("#setBody").addEventListener("click", (e) => {
+    const b = e.target.closest("button"); if (!b || b.disabled || !S) return;
+    const st = S.set, all = SETS.flatMap((x) => x[1]);
+    if (b.dataset.tog) sock.emit("settings", { [b.dataset.tog]: !st[b.dataset.tog] });
+    else if (b.dataset.num) { const r = all.find((x) => x[0] === b.dataset.num); sock.emit("settings", { [r[0]]: +(st[r[0]] + r[5] * +b.dataset.d).toFixed(2) }); }
+    else if (b.dataset.opt) { const r = all.find((x) => x[0] === b.dataset.opt), i = r[3].indexOf(st[r[0]]) + +b.dataset.d; sock.emit("settings", { [r[0]]: r[3][i] }); }
+    FX.sfx.tick();
+  });
+  $("#bSet").addEventListener("click", () => { $("#setOv").classList.remove("hidden"); $("#setBody").dataset.sig = ""; drawSettings(); });
+  $("#setX").addEventListener("click", () => $("#setOv").classList.add("hidden"));
+
   /* ---------- meeting ---------- */
   let voteSel = null, meetChatOpen = false, meetSeen = 0, lastTick = -1, prevDisc = 0;
   function meetingUI() {
@@ -220,13 +252,13 @@
           ${mt.callerU === p.u ? `<span class="meg">📣</span>` : ""}
           <span class="nm" style="${p.imp && !mine ? "color:#c0001a" : ""}">${esc(p.n)}</span>
           ${p.v && !res ? `<span class="vt">I VOTED</span>` : ""}
-          ${res ? `<span class="vdots">${dots.map((c, k) => `<i style="background:${M.COLORS[c]};animation-delay:${0.4 + k * 0.25}s"></i>`).join("")}</span>` : ""}
+          ${res ? `<span class="vdots">${dots.map((c, k) => `<i style="background:${c < 0 ? "#8a8f9c" : M.COLORS[c]};animation-delay:${0.4 + k * 0.25}s"></i>`).join("")}</span>` : ""}
           ${voteSel === p.u && canVote ? `<span class="ok"><span class="y" data-yes="${esc(p.u)}">✔</span><span class="n" data-no>✖</span></span>` : ""}</button>`;
       }).join("");
       $("#mGrid").querySelectorAll("canvas").forEach((c) => { const x = c.getContext("2d"); if (c.dataset.d) drawBody(x, 27, 32, M.COLORS[+c.dataset.c], 0); else drawSperm(x, 36, 46, M.COLORS[+c.dataset.c], 1, 0, false, { scale: 0.75 }); });
       $("#mSkip").disabled = !canVote; $("#mSkip").classList.toggle("sel", voteSel === "skip");
       $("#mSkip").innerHTML = voteSel === "skip" && canVote ? `SKIP VOTE? <span data-yes="skip" style="color:#2bbf47">✔</span> <span data-no style="color:#e3132b">✖</span>` : "SKIP VOTE";
-      $("#mSkipVotes").innerHTML = res ? res.skips.map((c, k) => `<i style="background:${M.COLORS[c]};animation-delay:${0.4 + k * 0.25}s"></i>`).join("") : "";
+      $("#mSkipVotes").innerHTML = res ? res.skips.map((c, k) => `<i style="background:${c < 0 ? "#8a8f9c" : M.COLORS[c]};animation-delay:${0.4 + k * 0.25}s"></i>`).join("") : "";
     }
     $("#mInfo").textContent = res ? "" : !s.me.inGame ? "You are spectating." : !s.me.alive ? "👻 Ghosts can't vote." : s.me.vote ? "✅ You voted." : mt.disc > 0 ? "Discuss!" : "Click a player to vote.";
     $("#mIn").disabled = !(s.me.inGame && s.me.alive) || !!res;
@@ -260,7 +292,7 @@
   $("#chatForm").addEventListener("submit", (e) => { e.preventDefault(); const v = $("#chatIn").value.trim(); if (v) sock.emit("chat", v); $("#chatIn").value = ""; });
   $("#bMap").addEventListener("click", toggleMap);
   $("#mapX").addEventListener("click", toggleMap);
-  function doUse() { const u = useTarget(); if (!u) return; if (u.k === "task") openTask(u.id); else if (u.k === "fix") sock.emit("fix"); else if (u.k === "emergency") sock.emit("emergency"); }
+  function doUse() { const u = useTarget(); if (!u) { if (playing() && S.me.alive && near(M.TABLE, 150) && S.emergIn > 0) toast(`Emergency button ready in ${S.emergIn}s`); else if (playing() && near(M.TABLE, 150) && S.me.meet <= 0) toast("You have no emergency meetings left."); return; } if (u.k === "task") openTask(u.id); else if (u.k === "fix") sock.emit("fix"); else if (u.k === "emergency") sock.emit("emergency"); }
   $("#aUse").addEventListener("click", doUse);
   $("#aReport").addEventListener("click", () => sock.emit("report"));
   $("#aKill").addEventListener("click", () => { sendPos(true); sock.emit("kill"); });
@@ -295,7 +327,7 @@
 
   /* ---------- opdrachten ---------- */
   let taskId = null;
-  function closeTask() { taskId = null; $("#taskOv").classList.add("hidden"); $("#taskBody").innerHTML = ""; }
+  function closeTask() { if (taskId === "medisch") sock.emit("scan", false); taskId = null; $("#taskOv").classList.add("hidden"); $("#taskBody").innerHTML = ""; }
   $("#taskX").addEventListener("click", closeTask);
   function openTask(id) {
     taskId = id; const T = M.TASKS[id], B = $("#taskBody");
@@ -313,7 +345,7 @@
       B.onclick = (e) => { const l = e.target.closest("[data-l]"), r = e.target.closest("[data-r]"); if (l && !ok.has(l.dataset.l)) sel = l.dataset.l; else if (r && sel) { if (r.dataset.r === sel) ok.add(sel); sel = null; } draw(); if (ok.size === 4) finish(); };
     } else if (T.t === "scan") {
       B.innerHTML = `<p>Step onto the scanner…</p><div class="tbar"><i id="tb"></i></div><button class="hold" id="tgo">START SCAN</button>`;
-      $("#tgo").onclick = (e) => { e.target.disabled = true; e.target.textContent = "Scanning…"; let p = 0; const it = setInterval(() => { if (taskId !== id) return clearInterval(it); p += 2.5; const b = $("#tb"); if (b) b.style.width = p + "%"; if (p >= 100) { clearInterval(it); finish(); } }, 100); };
+      $("#tgo").onclick = (e) => { e.target.disabled = true; e.target.textContent = "Scanning…"; sock.emit("scan", true); let p = 0; const it = setInterval(() => { if (taskId !== id) return clearInterval(it); p += 2.5; const b = $("#tb"); if (b) b.style.width = p + "%"; if (p >= 100) { clearInterval(it); finish(); } }, 100); };
     } else if (T.t === "kisten") {
       const n = [1, 2, 3, 4, 5, 6].sort(() => Math.random() - 0.5); let next = 1;
       const draw = () => { B.innerHTML = `<p>Tap the crates from 1 to 6.</p><div class="boxes">${n.map((x) => `<button class="${x < next ? "ok" : ""}" data-b="${x}">${x < next ? "✔" : x}</button>`).join("")}</div>`; };
@@ -381,7 +413,7 @@
       if (l > 0) {
         if (l > 1) { vx /= l; vy /= l; }
         const ghost = S.me.inGame && !S.me.alive && S.ph === "play";
-        const sp = M.SPEED * (ghost ? 1.25 : 1) * dt;
+        const sp = M.SPEED * (S.set?.speed || 1) * (ghost ? 1.25 : 1) * dt;
         const nx = me.x + vx * sp, ny = me.y + vy * sp;
         const ok = (x, y) => x > 0 && x < M.W && y > 0 && y < M.H && (ghost || M.walkable(x, y));
         if (ok(nx, me.y)) me.x = nx;
@@ -403,12 +435,18 @@
     // spelers (gesorteerd op y)
     const myGhost = S.me.inGame && !S.me.alive && S.ph === "play";
     const list = [];
-    for (const o of others.values()) { if (o.x == null || !o.p) continue; if (o.p.g && !o.p.a && S.ph === "play" && !myGhost) continue; if (S.ph === "play" && o.p.g !== S.me.inGame) continue; list.push({ x: o.x, y: o.y, c: o.p.c, f: o.f, w: o.w, n: o.p.n, ghost: o.p.g && !o.p.a && S.ph === "play", imp: o.p.imp }); }
+    for (const o of others.values()) { if (o.x == null || !o.p) continue; if (o.p.g && !o.p.a && S.ph === "play" && !myGhost) continue; if (S.ph === "play" && o.p.g !== S.me.inGame) continue; list.push({ sc: o.p.sc, x: o.x, y: o.y, c: o.p.c, f: o.f, w: o.w, n: o.p.n, ghost: o.p.g && !o.p.a && S.ph === "play", imp: o.p.imp }); }
     list.push({ x: me.x, y: me.y, c: S.me.c, f: me.f, w: me.walk, n: "", ghost: myGhost, mine: true });
     list.sort((a, b) => a.y - b.y);
     for (const p of list) {
       if (S.ph === "play" && !S.me.inGame) continue;
       drawSperm(ctx, p.x, p.y, M.COLORS[p.c], p.f, ts + p.x * 0.01, p.w, { ghost: p.ghost });
+      if (p.sc) { // visual task: medical scan beam
+        const yy = p.y - 10 - ((ts * 60) % 50);
+        ctx.fillStyle = "rgba(80,255,140,.18)"; ctx.fillRect(p.x - 30, p.y - 60, 60, 62);
+        ctx.strokeStyle = "rgba(120,255,170,.9)"; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(p.x - 32, yy); ctx.lineTo(p.x + 32, yy); ctx.stroke();
+        ctx.beginPath(); ctx.ellipse(p.x, p.y, 34, 10, 0, 0, 7); ctx.stroke();
+      }
       const nm = p.mine ? (playing() ? "" : "you") : p.n;
       if (nm) { ctx.font = "bold 15px Trebuchet MS, sans-serif"; ctx.textAlign = "center"; ctx.lineWidth = 4; ctx.strokeStyle = "#000"; ctx.strokeText(nm, p.x, p.y - 50); ctx.fillStyle = p.imp ? "#ff4d5e" : "#fff"; ctx.fillText(nm, p.x, p.y - 50); }
     }

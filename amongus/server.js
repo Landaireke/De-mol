@@ -32,13 +32,23 @@ function verify(t) {
 const KILL_CD = 22000, SAB_CD = 30000, REACTOR_T = 45000, DISC_T = 30000, VOTE_T = 60000, EJECT_T = 7000, REVEAL_T = 5000;
 const KILL_R = 120, USE_R = 120, REPORT_R = 160, VENT_R = 85, TABLE_R = 170;
 const lobbies = new Map();
+// game settings (host can change them in the lobby)
+const SET_DEF = { imps: 1, confirm: true, meetings: 1, emergCd: 15, disc: 30, vote: 60, anon: false, speed: 1, crewVis: 1, impVis: 1.5, killCd: 22, killDist: 1, visual: true, taskBar: "always", tasks: 5 };
+const SET_RULES = { imps: [1, 3, 1], meetings: [0, 5, 1], emergCd: [0, 60, 5], disc: [0, 120, 15], vote: [15, 180, 15], speed: [0.5, 2, 0.25], crewVis: [0.5, 2, 0.25], impVis: [0.5, 2.5, 0.25], killCd: [10, 60, 2.5], killDist: [0, 2, 1], tasks: [2, 8, 1] };
+function cleanSettings(cur, d) {
+  const o = { ...cur };
+  for (const [k, [lo, hi, st]] of Object.entries(SET_RULES)) if (typeof d[k] === "number" && isFinite(d[k])) o[k] = Math.min(hi, Math.max(lo, Math.round(d[k] / st) * st));
+  for (const k of ["confirm", "anon", "visual"]) if (typeof d[k] === "boolean") o[k] = d[k];
+  if (["always", "meetings", "never"].includes(d.taskBar)) o.taskBar = d.taskBar;
+  return o;
+}
 const now = () => Date.now();
 const clean = (s, n) => String(s ?? "").replace(/[\u0000-\u001f]/g, "").trim().slice(0, n);
 
 function lobby(code, name) {
   let L = lobbies.get(code);
   if (!L) {
-    L = { code, name, phase: "lobby", players: new Map(), host: null, chat: [], log: [], meeting: null, eject: null, sab: null, sabEnd: 0, sabAt: 0, until: 0, winner: null, splash: null, seq: 0 };
+    L = { code, name, set: { ...SET_DEF }, emergAt: 0, barProg: 0, phase: "lobby", players: new Map(), host: null, chat: [], log: [], meeting: null, eject: null, sab: null, sabEnd: 0, sabAt: 0, until: 0, winner: null, splash: null, seq: 0 };
     lobbies.set(code, L);
   }
   return L;
@@ -55,16 +65,16 @@ function chat(L, p, body, sys) { L.chat.push({ id: ++L.seq, u: sys ? null : p.ui
 
 function start(L) {
   const ps = [...L.players.values()];
-  const n = ps.length, k = n >= 9 ? 3 : n >= 7 ? 2 : 1;
+  const n = ps.length, k = Math.max(1, Math.min(L.set.imps, Math.floor((n - 1) / 2)));
   const order = ps.slice().sort(() => Math.random() - 0.5);
   const keys = Object.keys(M.TASKS);
   order.forEach((p, i) => {
-    p.inGame = true; p.alive = true; p.role = i < k ? "imp" : "crew"; p.vote = null; p.body = null; p.meetings = 1; p.killAt = now() + 10000;
-    p.tasks = keys.slice().sort(() => Math.random() - 0.5).slice(0, 5).map((id) => ({ id, done: false }));
+    p.inGame = true; p.alive = true; p.role = i < k ? "imp" : "crew"; p.vote = null; p.body = null; p.meetings = L.set.meetings; p.killAt = now() + 10000; p.scanUntil = 0;
+    p.tasks = keys.slice().sort(() => Math.random() - 0.5).slice(0, L.set.tasks).map((id) => ({ id, done: false }));
   });
   L.chat = L.chat.filter(() => false); L.log = []; L.sab = null; L.sabAt = now() - SAB_CD + 12000; L.winner = null; L.meetingNo = 0; L.eject = null;
   gather(L);
-  L.phase = "reveal"; L.until = now() + REVEAL_T; L.impCount = k;
+  L.phase = "reveal"; L.until = now() + REVEAL_T; L.impCount = k; L.emergAt = now() + REVEAL_T + L.set.emergCd * 1000; L.barProg = 0;
   say(L, "🚀 The ship takes off!");
 }
 function checkWin(L) {
@@ -79,8 +89,8 @@ function checkWin(L) {
 function over(L, w, why) { L.phase = "over"; L.winner = w; L.sab = null; L.why = why || ""; say(L, w === "crew" ? "🎉 Crewmates win!" : "🔪 Impostors win!"); }
 function meeting(L, caller, body) {
   L.meetingNo = (L.meetingNo || 0) + 1;
-  L.meeting = { no: L.meetingNo, caller: caller.name, callerU: caller.uid, callerC: caller.color, body: body ? body.name : null, bodyC: body ? body.color : null, disc: now() + DISC_T + 2500, end: now() + DISC_T + VOTE_T + 2500 };
-  L.sab = null; L.phase = "meeting";
+  L.meeting = { no: L.meetingNo, caller: caller.name, callerU: caller.uid, callerC: caller.color, body: body ? body.name : null, bodyC: body ? body.color : null, disc: now() + L.set.disc * 1000 + 2500, end: now() + (L.set.disc + L.set.vote) * 1000 + 2500 };
+  L.sab = null; L.phase = "meeting"; L.barProg = taskProg(L);
   inGame(L).forEach((p) => { p.vote = null; });
   say(L, body ? `📣 ${caller.name} reported ${body.name}'s body!` : `🚨 ${caller.name} called an emergency meeting!`);
 }
@@ -90,17 +100,18 @@ function resolveMeeting(L) {
   let max = 0, who = null, tie = false;
   for (const [u, c] of tally) { if (c > max) { max = c; who = u; tie = false; } else if (c === max) tie = true; }
   const votes = {}, skips = [];
-  al.forEach((p) => { if (p.vote === "skip") skips.push(p.color); else if (p.vote) (votes[p.vote] = votes[p.vote] || []).push(p.color); });
+  al.forEach((p) => { const c = L.set.anon ? -1 : p.color; if (p.vote === "skip") skips.push(c); else if (p.vote) (votes[p.vote] = votes[p.vote] || []).push(c); });
   L.res = { votes, skips, who: who && !tie && max > skip ? who : null };
   L.phase = "results"; L.until = now() + 5000;
 }
 function finishMeeting(L) {
   let ej = { skip: true };
   const v = L.res.who && L.players.get(L.res.who);
-  if (v) { v.alive = false; v.body = null; ej = { name: v.name, color: v.color, imp: v.role === "imp" }; say(L, `${v.name} was ejected.`); }
+  if (v) { v.alive = false; v.body = null; ej = { name: v.name, color: v.color, imp: L.set.confirm ? v.role === "imp" : null }; say(L, `${v.name} was ejected.`); }
   else say(L, "No one was ejected.");
-  ej.left = inGame(L).filter((p) => p.alive && p.role === "imp").length;
-  inGame(L).forEach((p) => { p.body = null; p.vote = null; p.killAt = now() + KILL_CD + EJECT_T; });
+  ej.left = L.set.confirm ? inGame(L).filter((p) => p.alive && p.role === "imp").length : null;
+  inGame(L).forEach((p) => { p.body = null; p.vote = null; p.killAt = now() + L.set.killCd * 1000 + EJECT_T; });
+  L.emergAt = now() + EJECT_T + L.set.emergCd * 1000;
   gather(L);
   L.eject = ej; L.phase = "eject"; L.until = now() + EJECT_T; L.meeting = null; L.res = null;
 }
@@ -128,16 +139,20 @@ setInterval(() => {
   }
 }, 66);
 
+function taskProg(L) {
+  const t = inGame(L).filter((p) => p.role === "crew").flatMap((p) => p.tasks);
+  return t.length ? t.filter((x) => x.done).length / t.length : 0;
+}
 function snapshot(L) {
   const t = now();
   const all = [...L.players.values()];
-  const g = inGame(L), crewTasks = g.filter((p) => p.role === "crew").flatMap((p) => p.tasks);
-  const prog = crewTasks.length ? crewTasks.filter((x) => x.done).length / crewTasks.length : 0;
+  const g = inGame(L), S2 = L.set;
+  const prog = S2.taskBar === "never" ? null : S2.taskBar === "meetings" ? L.barProg : taskProg(L);
   for (const me of all) {
     if (!me.sock) continue;
     const playing = me.inGame && L.phase !== "lobby";
     const ghost = playing && !me.alive;
-    const vis = !playing || ghost || L.phase !== "play" ? 1e9 : me.role === "imp" ? 430 : L.sab === "lights" ? 115 : 300;
+    const vis = !playing || ghost || L.phase !== "play" ? 1e9 : me.role === "imp" ? 290 * S2.impVis : (L.sab === "lights" ? 80 : 300) * S2.crewVis;
     const pl = all.map((p) => {
       const see = p === me || L.phase === "lobby" || L.phase === "over" || (p.inGame === me.inGame && (p.alive || ghost) && Math.hypot(p.x - me.x, p.y - me.y) <= vis + 40);
       return {
@@ -145,14 +160,14 @@ function snapshot(L) {
         x: see ? Math.round(p.x) : null, y: see ? Math.round(p.y) : null, f: p.f || 1, w: see && t - (p.lastMove || 0) < 150,
         imp: L.phase === "over" || (playing && me.role === "imp" && p.role === "imp") || undefined,
         v: (L.phase === "meeting" || L.phase === "results") && p.alive ? !!p.vote : undefined,
-        vent: p.venting || undefined,
+        sc: S2.visual && see && L.phase === "play" && p.scanUntil > t ? 1 : undefined,
       };
     });
     const bodies = L.phase === "play" ? g.filter((p) => p.body && Math.hypot(p.body.x - me.x, p.body.y - me.y) <= vis + 40).map((p) => ({ x: p.body.x, y: p.body.y, c: p.color, n: p.name })) : [];
     me.sock.volatile.emit("s", {
-      ph: L.phase, cls: L.name, host: L.host === me.uid, n: all.length, vis, prog, sab: L.sab, sabLeft: L.sab === "reactor" ? Math.max(0, Math.ceil((L.sabEnd - t) / 1000)) : null,
+      ph: L.phase, cls: L.name, set: L.set, emergIn: Math.max(0, Math.ceil((L.emergAt - t) / 1000)), host: L.host === me.uid, n: all.length, vis, prog, sab: L.sab, sabLeft: L.sab === "reactor" ? Math.max(0, Math.ceil((L.sabEnd - t) / 1000)) : null,
       sabIn: Math.max(0, Math.ceil((L.sabAt + SAB_CD - t) / 1000)), left: L.until ? Math.max(0, Math.ceil((L.until - t) / 1000)) : 0,
-      me: { u: me.uid, x: me.x, y: me.y, c: me.color, role: playing ? me.role : null, alive: me.alive !== false, inGame: !!me.inGame, tasks: playing && me.role === "crew" ? me.tasks : [], kill: Math.max(0, Math.ceil((me.killAt - t) / 1000)), meet: me.meetings, vote: me.vote, corr: me.corr || 0 },
+      me: { u: me.uid, x: me.x, y: me.y, c: me.color, role: playing ? me.role : null, alive: me.alive !== false, inGame: !!me.inGame, tasks: playing && me.role === "crew" ? me.tasks : [], kill: Math.max(0, Math.ceil((me.killAt - t) / 1000)), killR: [90, 120, 165][S2.killDist], meet: me.meetings, vote: me.vote, corr: me.corr || 0 },
       pl, bodies, winner: L.winner, why: L.why, eject: L.phase === "eject" ? L.eject : null, impCount: L.impCount,
       res: L.phase === "results" ? L.res : null, mt: L.meeting ? { ...L.meeting, disc: Math.max(0, Math.ceil((L.meeting.disc - t) / 1000)), end: Math.max(0, Math.ceil((L.meeting.end - t) / 1000)) } : null,
       chat: L.chat.filter((c) => (L.meeting ? c.m === L.meeting.no : c.m === 0) && (!c.ghost || ghost || L.phase === "lobby" || L.phase === "over")).slice(-40),
@@ -184,11 +199,13 @@ io.on("connection", (sock) => {
     if (!free || (!p.inGame && L.phase !== "lobby" && L.phase !== "over")) return;
     const t = now(), dt = Math.min(1, (t - (p.posT || t)) / 1000);
     const ghost = p.inGame && !p.alive && L.phase === "play";
-    const ok = Math.hypot(d.x - p.x, d.y - p.y) <= M.SPEED * (ghost ? 1.3 : 1) * dt * 1.6 + 25 && d.x >= 0 && d.x <= M.W && d.y >= 0 && d.y <= M.H && (ghost || M.walkable(d.x, d.y));
+    const ok = Math.hypot(d.x - p.x, d.y - p.y) <= M.SPEED * L.set.speed * (ghost ? 1.3 : 1) * dt * 1.6 + 25 && d.x >= 0 && d.x <= M.W && d.y >= 0 && d.y <= M.H && (ghost || M.walkable(d.x, d.y));
     if (ok) { if (Math.hypot(d.x - p.x, d.y - p.y) > 0.5) p.lastMove = t; p.x = d.x; p.y = d.y; p.f = d.f < 0 ? -1 : 1; p.posT = t; }
     else { p.posT = t; p.corr = (p.corr || 0) + 1; }
   });
   sock.on("color", (c) => { if (L.phase !== "lobby" && L.phase !== "over") return; c = +c; if (!(c >= 0 && c < M.COLORS.length)) return; if ([...L.players.values()].some((q) => q !== p && q.color === c)) return; p.color = c; });
+  sock.on("settings", (d) => { if (L.host !== p.uid || (L.phase !== "lobby" && L.phase !== "over") || !d || typeof d !== "object") return; L.set = cleanSettings(L.set, d); });
+  sock.on("scan", (on) => { if (!ctx().playing || p.role !== "crew" || !p.alive) return; const tk3 = M.TASKS.medisch; if (on && Math.hypot(p.x - tk3.x, p.y - tk3.y) > USE_R + 30) return; p.scanUntil = on ? now() + 6000 : 0; });
   sock.on("start", () => {
     if (L.host !== p.uid || (L.phase !== "lobby" && L.phase !== "over")) return;
     if (L.players.size < 4) return sock.emit("toast", "You need at least 4 players.");
@@ -203,9 +220,9 @@ io.on("connection", (sock) => {
   });
   sock.on("kill", () => {
     if (!ctx().playing || p.role !== "imp" || !p.alive || now() < p.killAt) return;
-    const v = alive(L).filter((q) => q.role === "crew" && Math.hypot(q.x - p.x, q.y - p.y) <= KILL_R).sort((a, b) => Math.hypot(a.x - p.x, a.y - p.y) - Math.hypot(b.x - p.x, b.y - p.y))[0];
+    const v = alive(L).filter((q) => q.role === "crew" && Math.hypot(q.x - p.x, q.y - p.y) <= [90, 120, 165][L.set.killDist] + 20).sort((a, b) => Math.hypot(a.x - p.x, a.y - p.y) - Math.hypot(b.x - p.x, b.y - p.y))[0];
     if (!v) return;
-    v.alive = false; v.body = { x: v.x, y: v.y }; p.x = v.x; p.y = v.y; p.killAt = now() + KILL_CD; p.corr = (p.corr || 0) + 1;
+    v.alive = false; v.body = { x: v.x, y: v.y }; p.x = v.x; p.y = v.y; p.killAt = now() + L.set.killCd * 1000; p.corr = (p.corr || 0) + 1;
     v.sock?.emit("killed", { k: p.color, v: v.color });
     sock.emit("kills", { k: p.color, v: v.color });
   });
@@ -215,7 +232,7 @@ io.on("connection", (sock) => {
     if (b) meeting(L, p, b);
   });
   sock.on("emergency", () => {
-    if (!ctx().playing || !p.alive || p.meetings <= 0 || L.sab) return;
+    if (!ctx().playing || !p.alive || p.meetings <= 0 || L.sab || now() < L.emergAt) return;
     if (Math.hypot(p.x - M.TABLE.x, p.y - M.TABLE.y) > TABLE_R) return;
     p.meetings--; meeting(L, p, null);
   });
