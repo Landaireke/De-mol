@@ -26,10 +26,10 @@
 </div>
 <div id="acts" class="acts hidden">
   <button id="aSab" class="act red hidden"><i>☢️</i><span>SABOTAGE</span></button>
-  <button id="aVent" class="act red hidden"><i>🕳️</i><span>VENT</span></button>
-  <button id="aKill" class="act red hidden"><i>🔪</i><span>KILL</span><b id="killCd"></b></button>
-  <button id="aReport" class="act"><i>📣</i><span>REPORT</span></button>
-  <button id="aUse" class="act"><i>✋</i><span>USE</span></button>
+  <button id="aVent" class="act red hidden"><i>🕳️</i><span>VENT</span><em>F</em></button>
+  <button id="aKill" class="act red hidden"><i>🔪</i><span>KILL</span><em>A</em><b id="killCd"></b></button>
+  <button id="aReport" class="act"><i>📣</i><span>REPORT</span><em>R</em></button>
+  <button id="aUse" class="act"><i>✋</i><span>USE</span><em>E</em></button>
 </div>
 <div id="sabMenu" class="sabmenu hidden"><button data-sab="reactor">☢️ Reactor meltdown</button><button data-sab="lights">💡 Lights</button></div>
 
@@ -41,10 +41,11 @@
 
 <div id="mapOv" class="ov hidden"><div class="mapbox"><canvas id="mapCv" width="1000" height="550"></canvas><button id="mapX" class="x">✕</button></div></div>
 <div id="taskOv" class="ov hidden"><div class="taskbox"><div class="thead"><b id="taskTitle"></b><button id="taskX" class="x">✕</button></div><div id="taskBody"></div></div></div>
-<div id="meet" class="ov meet hidden"><div class="tablet">
-  <div class="mhead"><b>Who is the Impostor?</b><span id="mTimer"></span></div>
-  <div class="mwrap"><div id="mGrid" class="mgrid"></div><div class="mside"><div id="mChat" class="clist"></div><form id="mForm" class="cform"><input id="mIn" maxlength="160" autocomplete="off" placeholder="Discuss…"><button>➤</button></form></div></div>
-  <div class="mfoot"><button id="mSkip" class="skip">⏭ SKIP VOTE</button><span id="mInfo"></span></div>
+<div id="meet" class="ov meet hidden"><div class="tablet" id="tablet">
+  <div class="mhead"><b>Who is the Impostor?</b><button id="mChatBtn" class="mchatbtn" title="Chat">💬<b id="mChatDot" class="dot hidden"></b></button></div>
+  <div id="mGrid" class="mgrid"></div>
+  <div class="mfoot"><div class="skipwrap"><button id="mSkip" class="skip">SKIP VOTE</button><div id="mSkipVotes" class="vdots"></div></div><span id="mInfo"></span><span id="mTimer" class="mtimer"></span></div>
+  <div id="mChatPanel" class="mchat hidden"><div class="mchead"><b>💬 Meeting chat</b><button id="mChatX" class="x">✕</button></div><div id="mChat" class="clist bubbles"></div><form id="mForm" class="cform"><input id="mIn" maxlength="160" autocomplete="off" placeholder="Type here…"><button>➤</button></form></div>
 </div></div>
 <div id="splash" class="ov splash hidden"></div>
 <div id="msg" class="toast hidden"></div>
@@ -54,6 +55,7 @@
 <script src="/socket.io/socket.io.js"></script>
 <script src="map.js"></script>
 <script src="sprite.js"></script>
+<script src="fx.js"></script>
 <script src="game.js"></script>
 </body>
 </html>

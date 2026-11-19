@@ -40,23 +40,29 @@
     prevPh = ph;
     hud();
   });
-  sock.on("killed", (d) => splash(`<h1 style="color:#ff3b4e">YOU WERE KILLED</h1><canvas id="spK" width="220" height="140"></canvas><p>You are a ghost now. You can still finish your tasks.</p>`, "alarmsp", 2600, () => fig("#spK", d.c, { dead: true })));
+  sock.on("killed", (d) => { closeTask(); splash(`<div id="kWrap"></div><div class="slam" style="font-size:clamp(28px,6vw,64px)">YOU WERE KILLED</div><p class="sub">You are a ghost now. Finish your tasks to help your crew!</p>`, "killed", 3200, () => FX.killAnim($("#kWrap"), M.COLORS[d.k], M.COLORS[d.v])); });
+  sock.on("kills", (d) => { splash(`<div id="kWrap"></div>`, "killed", 1700, () => FX.killAnim($("#kWrap"), M.COLORS[d.k], M.COLORS[d.v])); });
 
   function onPhase(a, b, old) {
     closeTask();
     if (b === "reveal") {
       const imp = S.me.role === "imp";
       const team = S.pl.filter((p) => p.g && (imp ? p.imp : true));
-      splash(`<p>${imp ? "" : `There ${S.impCount > 1 ? "are" : "is"} <b style="color:#ff3b4e">${S.impCount} Impostor${S.impCount > 1 ? "s" : ""}</b> among us`}</p><h1>${imp ? "IMPOSTOR" : "CREWMATE"}</h1>
-        <div class="row">${team.map((p, i) => `<div><canvas class="rv" data-c="${p.c}" width="110" height="110"></canvas><div>${esc(p.n)}</div></div>`).join("")}</div>`, imp ? "imp" : "crew", 4800, () => document.querySelectorAll(".rv").forEach((c) => fig(c, +c.dataset.c)));
+      splash(`<p>${imp ? "" : `There ${S.impCount > 1 ? "are" : "is"} <b style="color:#ff3b4e">${S.impCount} Impostor${S.impCount > 1 ? "s" : ""}</b> among us`}</p><h1>${imp ? "IMPOSTOR" : "CREWMATE"}</h1><p class="sub">${imp ? "Kill the crew without getting caught." : "Finish your tasks and find the Impostor."}</p>
+        <div class="row">${team.map((p, i) => `<div class="bounce" style="animation-delay:${0.3 + i * 0.12}s"><canvas class="rv" data-c="${p.c}" width="110" height="110"></canvas><div>${esc(p.n)}</div></div>`).join("")}</div>`, imp ? "imp" : "crew", 4800, () => (FX.sfx.reveal(), document.querySelectorAll(".rv")).forEach((c) => fig(c, +c.dataset.c)));
     }
     if (b === "meeting" && S.mt) {
-      splash(`<h1>${S.mt.body ? "DEAD BODY REPORTED" : "EMERGENCY MEETING"}</h1><canvas id="spM" width="200" height="140"></canvas><p>${esc(S.mt.caller)} ${S.mt.body ? `found ${esc(S.mt.body)}` : "pressed the button"}</p>`, "alarmsp", 2400, () => fig("#spM", S.mt.body ? S.mt.bodyC : S.mt.callerC, { dead: !!S.mt.body }));
-      voteSel = null;
+      const body = !!S.mt.body;
+      splash(body
+        ? `<div class="sp-rays"></div><canvas id="spM" width="260" height="170"></canvas><div class="slam">DEAD BODY REPORTED</div><p class="sub">${esc(S.mt.caller)} found ${esc(S.mt.body)}</p>`
+        : `<div class="sp-beams"></div><div class="slam">EMERGENCY MEETING!</div><canvas id="spM" width="240" height="170"></canvas><p class="sub">📣 ${esc(S.mt.caller)} pressed the button</p>`,
+        "alarmsp", 2600, () => { body ? FX.sfx.body() : FX.sfx.alarm(); fig("#spM", body ? S.mt.bodyC : S.mt.callerC, { dead: body }); });
+      voteSel = null; meetChatOpen = false; $("#mChatPanel").classList.add("hidden");
     }
-    if (b === "eject" && S.eject) showEject(S.eject);
+    if (b === "eject" && S.eject) { FX.sfx.eject(); showEject(S.eject); }
     if (b === "over") {
       const won = S.winner === (S.me.role === "imp" ? "imp" : "crew");
+      if (S.me.inGame) (won ? FX.sfx.win : FX.sfx.lose)();
       const winners = S.pl.filter((p) => p.g && (S.winner === "imp" ? p.imp : !p.imp));
       splash(`<h1 style="color:${won ? "#6cf" : "#ff3b4e"}">${S.me.inGame ? (won ? "VICTORY" : "DEFEAT") : "GAME OVER"}</h1><p>${S.winner === "imp" ? "Impostors win" : "Crewmates win"}${S.why ? ` · ${esc(S.why)}` : ""}</p>
         <div class="row">${winners.map((p) => `<div><canvas class="rv" data-c="${p.c}" width="110" height="110"></canvas><div>${esc(p.n)}</div></div>`).join("")}</div>
@@ -172,53 +178,78 @@
     } else $("#sabMenu").classList.add("hidden");
     // chat
     const list = s.chat;
-    if (ph === "meeting") meetingUI(); else $("#meet").classList.add("hidden");
-    renderChat(ph === "meeting" ? $("#mChat") : $("#chatList"), list);
+    const inMeet = ph === "meeting" || ph === "results";
+    if (inMeet) meetingUI(); else $("#meet").classList.add("hidden");
+    renderChat(inMeet ? $("#mChat") : $("#chatList"), list);
+    const lid = list.length ? list[list.length - 1].id : 0;
+    if (inMeet) { if (lid > meetSeen) { if (meetSeen && list[list.length - 1].u !== s.me.u) FX.sfx.chat(); if (!meetChatOpen) $("#mChatDot").classList.remove("hidden"); else meetSeen = lid; } if (meetChatOpen) meetSeen = lid; }
     const lastId = list.length ? list[list.length - 1].id : 0;
-    if ($("#chat").classList.contains("hidden") && lastId > chatSeen && ph !== "meeting") $("#chatDot").classList.remove("hidden");
-    if (!$("#chat").classList.contains("hidden") || ph === "meeting") { chatSeen = lastId; $("#chatDot").classList.add("hidden"); }
+    if ($("#chat").classList.contains("hidden") && lastId > chatSeen && !inMeet) $("#chatDot").classList.remove("hidden");
+    if (!$("#chat").classList.contains("hidden") || inMeet) { chatSeen = lastId; $("#chatDot").classList.add("hidden"); }
     $("#stick").classList.toggle("hidden", !("ontouchstart" in window) || !(ph === "lobby" || ph === "play" || ph === "over"));
   }
   function renderChat(box, list) {
     const sig = list.map((c) => c.id).join();
     if (box.dataset.sig === sig) return; box.dataset.sig = sig;
     const atB = box.scrollHeight - box.scrollTop - box.clientHeight < 40;
-    box.innerHTML = list.map((c) => c.c < 0 ? `<div class="cm sys"><div>${esc(c.b)}</div></div>` : `<div class="cm ${c.ghost ? "ghost" : ""}"><canvas width="34" height="34" data-c="${c.c}"></canvas><div><b style="color:${M.COLORS[c.c]};text-shadow:0 0 1px #000">${esc(c.n)}</b>${esc(c.b)}</div></div>`).join("") || `<div class="cm sys"><div>No messages yet.</div></div>`;
+    box.innerHTML = list.map((c) => c.c < 0 ? `<div class="cm sys"><div>${esc(c.b)}</div></div>` : `<div class="cm ${c.ghost ? "ghost" : ""} ${S && c.u === S.me.u ? "mine" : ""}"><canvas width="34" height="34" data-c="${c.c}"></canvas><div><b style="color:${M.COLORS[c.c]};text-shadow:0 0 1px #000">${esc(c.n)}</b>${esc(c.b)}</div></div>`).join("") || `<div class="cm sys"><div>No messages yet.</div></div>`;
     box.querySelectorAll("canvas[data-c]").forEach((c) => { const x = c.getContext("2d"); drawSperm(x, 24, 32, M.COLORS[+c.dataset.c], 1, 0, false, { scale: 0.55 }); });
     if (atB || true) box.scrollTop = box.scrollHeight;
   }
 
-  /* ---------- vergadering ---------- */
-  let voteSel = null;
+  /* ---------- meeting ---------- */
+  let voteSel = null, meetChatOpen = false, meetSeen = 0, lastTick = -1, prevDisc = 0;
   function meetingUI() {
     const s = S, mt = s.mt; if (!mt) return;
     $("#meet").classList.remove("hidden");
-    $("#mTimer").textContent = mt.disc > 0 ? `Discussion time: ${mt.disc}s` : `Voting ends in: ${mt.end}s`;
-    const canVote = s.me.inGame && s.me.alive && !s.me.vote && mt.disc === 0;
-    const sig = JSON.stringify([s.pl.map((p) => [p.u, p.a, p.v]), s.me.vote, voteSel, canVote]);
+    const res = s.ph === "results" ? s.res : null;
+    const canVote = !res && s.me.inGame && s.me.alive && !s.me.vote && mt.disc === 0;
+    if (prevDisc > 0 && mt.disc === 0 && meetChatOpen) setMeetChat(false); // voting starts: show the plates
+    prevDisc = mt.disc;
+    const secs = res ? s.left : mt.disc > 0 ? mt.disc : mt.end;
+    $("#mTimer").textContent = res ? `Proceeding in: ${s.left}s` : mt.disc > 0 ? `Voting begins in: ${mt.disc}s` : `Voting ends in: ${mt.end}s`;
+    if (!res && secs <= 5 && secs !== lastTick) { lastTick = secs; FX.sfx.tick(); }
+    const sig = JSON.stringify([s.pl.map((p) => [p.u, p.a, p.v]), s.me.vote, voteSel, canVote, !!res]);
     if ($("#mGrid").dataset.sig !== sig) {
       $("#mGrid").dataset.sig = sig;
-      $("#mGrid").innerHTML = s.pl.filter((p) => p.g).map((p) => {
-        const mine = p.u === s.me.u;
-        return `<button class="pc ${p.a ? "" : "dead"} ${mine ? "me" : ""} ${voteSel === p.u ? "sel" : ""}" data-pv="${esc(p.u)}" ${canVote && p.a && !mine ? "" : "disabled"}>
-          <canvas width="50" height="46" data-c="${p.c}" data-d="${p.a ? "" : 1}"></canvas><div><div>${esc(p.n)}${p.imp && !mine ? " 🔪" : ""}</div><small>${p.a ? "" : "💀 dead"}</small></div>
-          ${p.v ? `<span class="vt">I VOTED</span>` : ""}
-          ${voteSel === p.u && canVote ? `<span class="ok"><span class="y" data-yes="${esc(p.u)}" role="button">✔</span><span class="n" data-no role="button">✖</span></span>` : ""}</button>`;
+      const ps = s.pl.filter((p) => p.g).sort((a, b) => (b.a - a.a));
+      $("#mGrid").innerHTML = ps.map((p, i) => {
+        const mine = p.u === s.me.u, dots = res ? (res.votes[p.u] || []) : [];
+        return `<button class="pc ${p.a ? "" : "dead"} ${mine ? "me" : ""} ${voteSel === p.u ? "sel" : ""}" style="animation-delay:${i * 0.05}s" data-pv="${esc(p.u)}" ${canVote && p.a && !mine ? "" : "disabled"}>
+          <canvas width="54" height="50" data-c="${p.c}" data-d="${p.a ? "" : 1}"></canvas>
+          ${mt.callerU === p.u ? `<span class="meg">📣</span>` : ""}
+          <span class="nm" style="${p.imp && !mine ? "color:#c0001a" : ""}">${esc(p.n)}</span>
+          ${p.v && !res ? `<span class="vt">I VOTED</span>` : ""}
+          ${res ? `<span class="vdots">${dots.map((c, k) => `<i style="background:${M.COLORS[c]};animation-delay:${0.4 + k * 0.25}s"></i>`).join("")}</span>` : ""}
+          ${voteSel === p.u && canVote ? `<span class="ok"><span class="y" data-yes="${esc(p.u)}">✔</span><span class="n" data-no>✖</span></span>` : ""}</button>`;
       }).join("");
-      $("#mGrid").querySelectorAll("canvas").forEach((c) => { const x = c.getContext("2d"); if (c.dataset.d) drawBody(x, 25, 30, M.COLORS[+c.dataset.c], 0); else drawSperm(x, 32, 44, M.COLORS[+c.dataset.c], 1, 0, false, { scale: 0.75 }); });
+      $("#mGrid").querySelectorAll("canvas").forEach((c) => { const x = c.getContext("2d"); if (c.dataset.d) drawBody(x, 27, 32, M.COLORS[+c.dataset.c], 0); else drawSperm(x, 36, 46, M.COLORS[+c.dataset.c], 1, 0, false, { scale: 0.75 }); });
       $("#mSkip").disabled = !canVote; $("#mSkip").classList.toggle("sel", voteSel === "skip");
-      $("#mSkip").textContent = voteSel === "skip" && canVote ? "⏭ SKIP? click again" : "⏭ SKIP VOTE";
+      $("#mSkip").innerHTML = voteSel === "skip" && canVote ? `SKIP VOTE? <span data-yes="skip" style="color:#2bbf47">✔</span> <span data-no style="color:#e3132b">✖</span>` : "SKIP VOTE";
+      $("#mSkipVotes").innerHTML = res ? res.skips.map((c, k) => `<i style="background:${M.COLORS[c]};animation-delay:${0.4 + k * 0.25}s"></i>`).join("") : "";
     }
-    $("#mInfo").textContent = !s.me.inGame ? "You are spectating." : !s.me.alive ? "👻 Ghosts can't vote." : s.me.vote ? "✅ You voted." : mt.disc > 0 ? "Discuss first…" : "Click a player to vote.";
-    $("#mIn").disabled = !(s.me.inGame && s.me.alive);
+    $("#mInfo").textContent = res ? "" : !s.me.inGame ? "You are spectating." : !s.me.alive ? "👻 Ghosts can't vote." : s.me.vote ? "✅ You voted." : mt.disc > 0 ? "Discuss!" : "Click a player to vote.";
+    $("#mIn").disabled = !(s.me.inGame && s.me.alive) || !!res;
+    $("#mIn").placeholder = $("#mIn").disabled ? "You can't talk right now." : "Type here…";
   }
+  function setMeetChat(on) {
+    meetChatOpen = on; $("#mChatPanel").classList.toggle("hidden", !on);
+    if (on) { $("#mChatDot").classList.add("hidden"); const l = S?.chat || []; meetSeen = l.length ? l[l.length - 1].id : meetSeen; const b = $("#mChat"); b.scrollTop = b.scrollHeight; if (!$("#mIn").disabled) $("#mIn").focus(); }
+  }
+  $("#mChatBtn").addEventListener("click", () => setMeetChat(!meetChatOpen));
+  $("#mChatX").addEventListener("click", () => setMeetChat(false));
+  function castVote(u) { sock.emit("vote", u); voteSel = null; FX.sfx.vote(); $("#mGrid").dataset.sig = ""; }
   $("#mGrid").addEventListener("click", (e) => {
-    const y = e.target.closest("[data-yes]"); if (y) { sock.emit("vote", y.dataset.yes); voteSel = null; return; }
+    const y = e.target.closest("[data-yes]"); if (y) return castVote(y.dataset.yes);
     if (e.target.closest("[data-no]")) { voteSel = null; $("#mGrid").dataset.sig = ""; return meetingUI(); }
     const b = e.target.closest("[data-pv]"); if (!b || b.disabled) return;
-    voteSel = b.dataset.pv; $("#mGrid").dataset.sig = ""; meetingUI();
+    voteSel = b.dataset.pv; FX.sfx.tick(); $("#mGrid").dataset.sig = ""; meetingUI();
   });
-  $("#mSkip").addEventListener("click", () => { if (voteSel === "skip") { sock.emit("vote", "skip"); voteSel = null; } else { voteSel = "skip"; $("#mGrid").dataset.sig = ""; meetingUI(); } });
+  $("#mSkip").addEventListener("click", (e) => {
+    if (e.target.closest("[data-yes]")) return castVote("skip");
+    if (e.target.closest("[data-no]")) { voteSel = null; $("#mGrid").dataset.sig = ""; return meetingUI(); }
+    voteSel = "skip"; $("#mGrid").dataset.sig = ""; meetingUI();
+  });
   $("#mForm").addEventListener("submit", (e) => { e.preventDefault(); const v = $("#mIn").value.trim(); if (v) sock.emit("chat", v); $("#mIn").value = ""; });
 
   /* ---------- knoppen ---------- */
@@ -241,11 +272,11 @@
     const k = e.key.toLowerCase();
     if (k === "e" || k === " ") { e.preventDefault(); doUse(); }
     else if (k === "r" && !$("#aReport").disabled) sock.emit("report");
-    else if (k === "x" && S?.me.role === "imp" && !$("#aKill").disabled) { sendPos(true); sock.emit("kill"); }
-    else if (k === "v" && S?.me.role === "imp" && !$("#aVent").disabled) { sendPos(true); sock.emit("vent"); }
+    else if (k === "a" && S?.me.role === "imp" && !$("#aKill").disabled) { sendPos(true); sock.emit("kill"); }
+    else if (k === "f" && S?.me.role === "imp" && !$("#aVent").disabled) { sendPos(true); sock.emit("vent"); }
     else if (k === "m" && !$("#bMap").classList.contains("hidden")) toggleMap();
     else if (k === "c" && !$("#bChat").classList.contains("hidden")) { e.preventDefault(); $("#chat").classList.remove("hidden"); $("#chatIn").focus(); }
-    else if (k === "escape") { closeTask(); $("#mapOv").classList.add("hidden"); $("#sabMenu").classList.add("hidden"); $("#chat").classList.add("hidden"); }
+    else if (k === "escape") { setMeetChat(false); closeTask(); $("#mapOv").classList.add("hidden"); $("#sabMenu").classList.add("hidden"); $("#chat").classList.add("hidden"); }
   });
 
   /* ---------- kaart ---------- */
@@ -269,7 +300,7 @@
   function openTask(id) {
     taskId = id; const T = M.TASKS[id], B = $("#taskBody");
     $("#taskTitle").textContent = `${M.ROOMS[id].n}: ${T.n}`; $("#taskOv").classList.remove("hidden");
-    const finish = () => { B.innerHTML = `<div class="tok">✅ Task complete!</div>`; sendPos(true); sock.emit("task", id); setTimeout(() => { if (taskId === id) closeTask(); }, 800); };
+    const finish = () => { FX.sfx.task(); B.innerHTML = `<div class="tok">✅ Task complete!</div>`; sendPos(true); sock.emit("task", id); setTimeout(() => { if (taskId === id) closeTask(); }, 800); };
     if (T.t === "code") {
       const code = String(Math.floor(10000 + Math.random() * 90000)); let typed = "";
       const draw = () => { B.innerHTML = `<div class="tcode">${code}</div><div class="tdisp">${typed.padEnd(5, "_")}</div><div class="keys">${[1, 2, 3, 4, 5, 6, 7, 8, 9, "⌫", 0, "OK"].map((k) => `<button data-k="${k}">${k}</button>`).join("")}</div>`; };
@@ -340,9 +371,9 @@
     me.walk = false;
     if (canMove()) {
       let vx = 0, vy = 0;
-      if (keys.has("a") || keys.has("q") || keys.has("arrowleft")) vx -= 1;
+      if (keys.has("q") || keys.has("arrowleft")) vx -= 1;
       if (keys.has("d") || keys.has("arrowright")) vx += 1;
-      if (keys.has("w") || keys.has("arrowup") || keys.has("z")) vy -= 1;
+      if (keys.has("z") || keys.has("arrowup")) vy -= 1;
       if (keys.has("s") || keys.has("arrowdown")) vy += 1;
       if (stickV) { vx = stickV.x; vy = stickV.y; }
       else if (ptr && !vx && !vy) { const dx = ptr.x - W / 2, dy = ptr.y - (H / 2 - 20 * scale); const l = Math.hypot(dx, dy); if (l > 18) { vx = dx / l; vy = dy / l; } }
