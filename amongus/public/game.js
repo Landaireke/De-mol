@@ -6,6 +6,7 @@
   const cv = $("#cv"), ctx = cv.getContext("2d");
 
   /* ---------- ticket ---------- */
+  const DEV = location.search.includes("dev");
   let ticket = (location.hash.match(/t=([^&]+)/) || [])[1];
   if (ticket) { ticket = decodeURIComponent(ticket); try { sessionStorage.setItem("au_t", ticket); } catch {} history.replaceState(null, "", location.pathname); }
   else { try { ticket = sessionStorage.getItem("au_t"); } catch {} }
@@ -331,6 +332,7 @@
   $("#taskX").addEventListener("click", closeTask);
   function openTask(id) {
     taskId = id; const T = M.TASKS[id], B = $("#taskBody");
+    B.onclick = null; // drop the click handler of the previous minigame
     $("#taskTitle").textContent = `${M.ROOMS[id].n}: ${T.n}`; $("#taskOv").classList.remove("hidden");
     const finish = () => { FX.sfx.task(); B.innerHTML = `<div class="tok">✅ Task complete!</div>`; sendPos(true); sock.emit("task", id); setTimeout(() => { if (taskId === id) closeTask(); }, 800); };
     if (T.t === "code") {
@@ -370,7 +372,7 @@
   cv.addEventListener("pointermove", (e) => { if (ptr) ptr = { x: e.clientX, y: e.clientY }; });
   cv.addEventListener("pointerup", () => (ptr = null));
   cv.addEventListener("pointercancel", () => (ptr = null));
-  let stickV = null;
+  let stickV = null, devTarget = null;
   const st = $("#stick"), knob = st.querySelector("i");
   st.addEventListener("pointerdown", (e) => { st.setPointerCapture(e.pointerId); moveStick(e); });
   st.addEventListener("pointermove", (e) => { if (e.buttons || e.pointerType === "touch") moveStick(e); });
@@ -395,7 +397,7 @@
   function resize() { DPR = Math.min(2, devicePixelRatio || 1); W = innerWidth; H = innerHeight; cv.width = W * DPR; cv.height = H * DPR; }
   addEventListener("resize", resize); resize();
   const stars = Array.from({ length: 160 }, () => ({ x: Math.random(), y: Math.random(), s: Math.random() * 1.6 + 0.3 }));
-  let lt = performance.now();
+  let lt = performance.now(); const bubbles = [];
   function frame(t) {
     const dt = Math.min(0.05, (t - lt) / 1000); lt = t; const ts = t / 1000;
     const scale = Math.min(1.25, Math.max(0.6, Math.min(W / 1000, H / 640)));
@@ -407,6 +409,7 @@
       if (keys.has("d") || keys.has("arrowright")) vx += 1;
       if (keys.has("z") || keys.has("arrowup")) vy -= 1;
       if (keys.has("s") || keys.has("arrowdown")) vy += 1;
+      if (devTarget) { const dx = devTarget.x - me.x, dy = devTarget.y - me.y, l2 = Math.hypot(dx, dy); if (l2 < 8) devTarget = null; else { vx = dx / l2; vy = dy / l2; } }
       if (stickV) { vx = stickV.x; vy = stickV.y; }
       else if (ptr && !vx && !vy) { const dx = ptr.x - W / 2, dy = ptr.y - (H / 2 - 20 * scale); const l = Math.hypot(dx, dy); if (l > 18) { vx = dx / l; vy = dy / l; } }
       const l = Math.hypot(vx, vy);
@@ -438,6 +441,10 @@
     for (const o of others.values()) { if (o.x == null || !o.p) continue; if (o.p.g && !o.p.a && S.ph === "play" && !myGhost) continue; if (S.ph === "play" && o.p.g !== S.me.inGame) continue; list.push({ sc: o.p.sc, x: o.x, y: o.y, c: o.p.c, f: o.f, w: o.w, n: o.p.n, ghost: o.p.g && !o.p.a && S.ph === "play", imp: o.p.imp }); }
     list.push({ x: me.x, y: me.y, c: S.me.c, f: me.f, w: me.walk, n: "", ghost: myGhost, mine: true });
     list.sort((a, b) => a.y - b.y);
+    // bubble trail behind swimming players
+    for (const p of list) if (p.w && Math.random() < dt * 9) { const e = window.SPR.tailEnd(p.x, p.y, p.f); bubbles.push({ x: e.x + (Math.random() - 0.5) * 8, y: e.y + (Math.random() - 0.5) * 8, r: 2 + Math.random() * 3, t: 0, g: p.ghost }); }
+    for (let i = bubbles.length - 1; i >= 0; i--) { const b = bubbles[i]; b.t += dt; b.y -= 18 * dt; b.x += Math.sin(b.t * 6 + b.r) * 10 * dt; if (b.t > 0.9) bubbles.splice(i, 1); }
+    for (const b of bubbles) { ctx.strokeStyle = `rgba(200,235,255,${(1 - b.t / 0.9) * (b.g ? 0.3 : 0.7)})`; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(b.x, b.y, b.r * (1 + b.t), 0, 7); ctx.stroke(); }
     for (const p of list) {
       if (S.ph === "play" && !S.me.inGame) continue;
       drawSperm(ctx, p.x, p.y, M.COLORS[p.c], p.f, ts + p.x * 0.01, p.w, { ghost: p.ghost });
@@ -496,5 +503,6 @@
       if (mine) { ctx.strokeStyle = `rgba(255,225,77,${0.55 + Math.sin(ts * 5) * 0.4})`; ctx.lineWidth = 5; ctx.strokeRect(p.x - 23, p.y - 29, 46, 42); ctx.fillStyle = "#ffe14d"; ctx.font = "bold 24px sans-serif"; ctx.textAlign = "center"; ctx.fillText("!", p.x, p.y - 34 + Math.sin(ts * 4) * 3); }
     }
   }
+  if (DEV) window.__au = { openTask, walkTo: (x, y) => (devTarget = { x, y }), get S() { return S; }, me };
   requestAnimationFrame(frame);
 })();
